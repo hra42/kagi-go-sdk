@@ -282,7 +282,7 @@ func TestExtractRateLimited(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("k", WithBaseURL(server.URL+"/api/v1"), WithHTTPClient(server.Client()))
+	client := NewClient("k", WithBaseURL(server.URL+"/api/v1"), WithHTTPClient(server.Client()), WithRetries(0))
 	_, err := client.Extract(context.Background(), ExtractRequest{
 		Pages: []ExtractPage{{URL: "https://example.com/"}},
 	})
@@ -309,7 +309,7 @@ func TestExtractServerError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("k", WithBaseURL(server.URL+"/api/v1"), WithHTTPClient(server.Client()))
+	client := NewClient("k", WithBaseURL(server.URL+"/api/v1"), WithHTTPClient(server.Client()), WithRetries(0))
 	_, err := client.Extract(context.Background(), ExtractRequest{
 		Pages: []ExtractPage{{URL: "https://example.com/"}},
 	})

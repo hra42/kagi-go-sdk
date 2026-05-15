@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -25,18 +26,28 @@ func (c *Client) newRequest(ctx context.Context, method, endpointPath string, qu
 		return nil, errors.New("kagi: nil context")
 	}
 
-	var requestBody io.Reader
+	var (
+		bodyBytes   []byte
+		requestBody io.Reader
+	)
 	if body != nil {
-		var buf bytes.Buffer
-		if err := json.NewEncoder(&buf).Encode(body); err != nil {
+		buf, err := json.Marshal(body)
+		if err != nil {
 			return nil, err
 		}
-		requestBody = &buf
+		bodyBytes = buf
+		requestBody = bytes.NewReader(bodyBytes)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, c.endpointURL(endpointPath, query), requestBody)
 	if err != nil {
 		return nil, err
+	}
+	if bodyBytes != nil {
+		// Replayable body for retries (and stdlib redirect handling).
+		req.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+		}
 	}
 
 	req.Header.Set("Accept", "application/json")
@@ -50,16 +61,121 @@ func (c *Client) newRequest(ctx context.Context, method, endpointPath string, qu
 }
 
 func (c *Client) do(req *http.Request) (*http.Response, error) {
-	resp, err := c.httpClient.Do(req)
+	ctx := req.Context()
+
+	for attempt := 0; ; attempt++ {
+		if attempt > 0 {
+			if req.GetBody != nil {
+				body, err := req.GetBody()
+				if err != nil {
+					return nil, err
+				}
+				req.Body = body
+			}
+		}
+
+		resp, err := c.httpClient.Do(req)
+
+		// Context cancellation always wins over retry classification.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			if resp != nil {
+				drainAndClose(resp.Body)
+			}
+			return nil, ctxErr
+		}
+
+		retryable, delay := c.classifyAttempt(resp, err, attempt)
+		if !retryable {
+			if err != nil {
+				return nil, err
+			}
+			if resp.StatusCode >= 400 {
+				apiErr := parseAPIError(resp)
+				drainAndClose(resp.Body)
+				return nil, apiErr
+			}
+			return resp, nil
+		}
+
+		// Retry: discard this response (if any) and wait before next attempt.
+		if resp != nil {
+			drainAndClose(resp.Body)
+		}
+		if err := c.sleep(ctx, delay); err != nil {
+			return nil, err
+		}
+	}
+}
+
+// classifyAttempt returns whether the current attempt should be retried, and
+// the delay to wait before retrying. resp is nil iff err is non-nil (transport
+// error path).
+func (c *Client) classifyAttempt(resp *http.Response, err error, attempt int) (bool, time.Duration) {
+	if attempt >= c.maxRetries {
+		return false, 0
+	}
+
 	if err != nil {
-		return nil, err
+		// Caller-initiated cancellations are not transient.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return false, 0
+		}
+		return true, backoffDelay(c.backoffBase, c.backoffMax, attempt)
 	}
-	if resp.StatusCode >= 400 {
-		apiErr := parseAPIError(resp)
-		drainAndClose(resp.Body)
-		return nil, apiErr
+
+	if resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode < 500 {
+		return false, 0
 	}
-	return resp, nil
+
+	// Honor Retry-After when the server provides it (429/503 typically).
+	if ra := parseRetryAfter(resp.Header.Get("Retry-After"), time.Now()); ra > 0 {
+		if ra > c.backoffMax {
+			ra = c.backoffMax
+		}
+		return true, ra
+	}
+	return true, backoffDelay(c.backoffBase, c.backoffMax, attempt)
+}
+
+// backoffDelay returns an exponential-backoff window with full jitter for the
+// given attempt (0-indexed for the post-failure wait).
+func backoffDelay(base, max time.Duration, attempt int) time.Duration {
+	if base <= 0 {
+		return 0
+	}
+	// Saturating left-shift to avoid overflow on long retry sequences.
+	window := base
+	for i := 0; i < attempt; i++ {
+		next := window * 2
+		if next <= window || next > max {
+			window = max
+			break
+		}
+		window = next
+	}
+	if window > max {
+		window = max
+	}
+	if window <= 0 {
+		return 0
+	}
+	return time.Duration(rand.Int64N(int64(window)))
+}
+
+// contextSleep waits for d, or until ctx is cancelled. Returns ctx.Err() on
+// cancellation and nil on a clean wait.
+func contextSleep(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (c *Client) endpointURL(endpointPath string, query url.Values) string {

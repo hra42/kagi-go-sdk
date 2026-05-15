@@ -266,9 +266,10 @@ func TestParseRetryAfterInvalid(t *testing.T) {
 }
 
 // doGet issues a GET against the test server and returns the error from do().
+// Retries are disabled so error-shape assertions don't pay backoff costs.
 func doGet(t *testing.T, server *httptest.Server) error {
 	t.Helper()
-	client := NewClient("k", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("k", WithBaseURL(server.URL), WithHTTPClient(server.Client()), WithRetries(0))
 	req, err := client.newRequest(context.Background(), http.MethodGet, "/", nil, nil)
 	if err != nil {
 		t.Fatalf("newRequest: %v", err)

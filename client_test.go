@@ -25,8 +25,14 @@ func TestNewClientDefaults(t *testing.T) {
 	if client.httpClient.Timeout != defaultTimeout {
 		t.Fatalf("timeout = %s, want %s", client.httpClient.Timeout, defaultTimeout)
 	}
-	if client.maxRetries != 0 {
-		t.Fatalf("max retries = %d, want 0", client.maxRetries)
+	if client.maxRetries != defaultMaxRetries {
+		t.Fatalf("max retries = %d, want %d", client.maxRetries, defaultMaxRetries)
+	}
+	if client.backoffBase != defaultBackoffBase {
+		t.Fatalf("backoff base = %s, want %s", client.backoffBase, defaultBackoffBase)
+	}
+	if client.backoffMax != defaultBackoffMax {
+		t.Fatalf("backoff max = %s, want %s", client.backoffMax, defaultBackoffMax)
 	}
 	if client.userAgent != defaultUserAgent {
 		t.Fatalf("user agent = %q, want %q", client.userAgent, defaultUserAgent)
