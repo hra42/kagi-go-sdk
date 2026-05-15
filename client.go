@@ -1,6 +1,7 @@
 package kagi
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"strings"
@@ -8,28 +9,41 @@ import (
 )
 
 const (
-	defaultBaseURL   = "https://kagi.com/api/v1"
-	defaultTimeout   = 30 * time.Second
-	defaultUserAgent = "kagi-go-sdk"
+	defaultBaseURL     = "https://kagi.com/api/v1"
+	defaultTimeout     = 30 * time.Second
+	defaultUserAgent   = "kagi-go-sdk"
+	defaultMaxRetries  = 3
+	defaultBackoffBase = 500 * time.Millisecond
+	defaultBackoffMax  = 30 * time.Second
 )
 
 // Client is a Kagi API client.
 //
-// Clients are safe to reuse across requests after construction.
+// Clients are safe to reuse across requests after construction. Requests that
+// fail with HTTP 429, 5xx, or transient network errors are retried
+// transparently with exponential backoff plus full jitter; see [WithRetries]
+// and [WithBackoff] to tune the behavior.
 type Client struct {
-	apiKey     string
-	baseURL    *url.URL
-	httpClient *http.Client
-	maxRetries int // TODO(M3): wired into retry/backoff layer
-	userAgent  string
+	apiKey      string
+	baseURL     *url.URL
+	httpClient  *http.Client
+	maxRetries  int
+	backoffBase time.Duration
+	backoffMax  time.Duration
+	userAgent   string
+	// sleep is the backoff delay function. Tests swap this; production uses
+	// the contextSleep helper which honors ctx cancellation.
+	sleep func(ctx context.Context, d time.Duration) error
 }
 
 type config struct {
-	baseURL    string
-	httpClient *http.Client
-	maxRetries int
-	timeout    *time.Duration
-	userAgent  string
+	baseURL     string
+	httpClient  *http.Client
+	maxRetries  *int
+	backoffBase time.Duration
+	backoffMax  time.Duration
+	timeout     *time.Duration
+	userAgent   string
 }
 
 // Option configures a Client.
@@ -57,12 +71,28 @@ func NewClient(apiKey string, opts ...Option) *Client {
 		httpClient.Timeout = defaultTimeout
 	}
 
+	maxRetries := defaultMaxRetries
+	if cfg.maxRetries != nil {
+		maxRetries = *cfg.maxRetries
+	}
+	backoffBase := cfg.backoffBase
+	if backoffBase <= 0 {
+		backoffBase = defaultBackoffBase
+	}
+	backoffMax := cfg.backoffMax
+	if backoffMax <= 0 {
+		backoffMax = defaultBackoffMax
+	}
+
 	return &Client{
-		apiKey:     apiKey,
-		baseURL:    baseURL,
-		httpClient: httpClient,
-		maxRetries: cfg.maxRetries,
-		userAgent:  cfg.userAgent,
+		apiKey:      apiKey,
+		baseURL:     baseURL,
+		httpClient:  httpClient,
+		maxRetries:  maxRetries,
+		backoffBase: backoffBase,
+		backoffMax:  backoffMax,
+		userAgent:   cfg.userAgent,
+		sleep:       contextSleep,
 	}
 }
 
@@ -107,16 +137,37 @@ func WithBaseURL(baseURL string) Option {
 	}
 }
 
-// WithRetries configures the maximum number of retries for retryable requests.
+// WithRetries configures the maximum number of retries for retryable requests
+// (HTTP 429, 5xx, and transient network errors). The default is 3. Pass 0 to
+// disable retries; negative values are treated as 0.
 //
-// Retry execution is implemented by a later production-readiness milestone;
-// this option stores the configured value for that layer.
+// Retries are transparent to the caller: a successful retry returns the
+// success response, and an exhausted retry budget returns the final error.
 func WithRetries(maxRetries int) Option {
 	return func(cfg *config) {
 		if maxRetries < 0 {
 			maxRetries = 0
 		}
-		cfg.maxRetries = maxRetries
+		cfg.maxRetries = &maxRetries
+	}
+}
+
+// WithBackoff configures retry backoff timing.
+//
+// base is the initial backoff window; the window doubles each attempt up to
+// max. Each delay is jittered uniformly in [0, window). Non-positive values
+// leave the corresponding default in place (500ms base, 30s max).
+//
+// The configured max is also the ceiling applied to a server-provided
+// Retry-After value.
+func WithBackoff(base, max time.Duration) Option {
+	return func(cfg *config) {
+		if base > 0 {
+			cfg.backoffBase = base
+		}
+		if max > 0 {
+			cfg.backoffMax = max
+		}
 	}
 }
 
