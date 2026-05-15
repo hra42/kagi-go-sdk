@@ -41,7 +41,7 @@ func doPost(t *testing.T, client *Client, body any) (*http.Response, error) {
 	if err != nil {
 		t.Fatalf("newRequest: %v", err)
 	}
-	return client.do(req)
+	return client.do(req) //nolint:bodyclose // caller is responsible
 }
 
 func TestRetryOn429ThenSuccess(t *testing.T) {
@@ -61,7 +61,7 @@ func TestRetryOn429ThenSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("do: %v", err)
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp.Body)
 
 	if got := hits.Load(); got != 2 {
 		t.Fatalf("hits = %d, want 2", got)
@@ -87,7 +87,7 @@ func TestRetryOn500ThenSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("do: %v", err)
 	}
-	resp.Body.Close()
+	drainAndClose(resp.Body)
 	if got := hits.Load(); got != 2 {
 		t.Fatalf("hits = %d, want 2", got)
 	}
@@ -113,7 +113,7 @@ func TestRetryHonorsRetryAfter(t *testing.T) {
 		WithRetries(3),
 		WithBackoff(1*time.Millisecond, 10*time.Second),
 	)
-	client.sleep = func(ctx context.Context, d time.Duration) error {
+	client.sleep = func(_ context.Context, d time.Duration) error {
 		recorded = append(recorded, d)
 		return nil
 	}
@@ -122,7 +122,7 @@ func TestRetryHonorsRetryAfter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("do: %v", err)
 	}
-	resp.Body.Close()
+	drainAndClose(resp.Body)
 
 	if len(recorded) != 1 {
 		t.Fatalf("recorded sleeps = %v, want 1", recorded)
@@ -146,7 +146,7 @@ func TestRetryAfterCappedByBackoffMax(t *testing.T) {
 		WithRetries(1),
 		WithBackoff(1*time.Millisecond, 250*time.Millisecond),
 	)
-	client.sleep = func(ctx context.Context, d time.Duration) error {
+	client.sleep = func(_ context.Context, d time.Duration) error {
 		recorded = append(recorded, d)
 		return nil
 	}
@@ -251,7 +251,7 @@ func TestRetryReplaysRequestBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("do: %v", err)
 	}
-	resp.Body.Close()
+	drainAndClose(resp.Body)
 
 	if len(bodies) != 2 {
 		t.Fatalf("bodies recorded = %d, want 2", len(bodies))
@@ -280,7 +280,7 @@ func TestRetryStopsOnContextCancel(t *testing.T) {
 		WithBackoff(1*time.Millisecond, 5*time.Millisecond),
 	)
 	// Cancel during the first backoff sleep.
-	client.sleep = func(ctx context.Context, d time.Duration) error {
+	client.sleep = func(ctx context.Context, _ time.Duration) error {
 		cancel()
 		return ctx.Err()
 	}
@@ -301,7 +301,7 @@ func TestRetryStopsOnContextCancel(t *testing.T) {
 func TestRetryOnTransportError(t *testing.T) {
 	// Server that closes the connection without responding triggers a
 	// transport-level error on every attempt.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		hj, ok := w.(http.Hijacker)
 		if !ok {
 			t.Fatal("ResponseWriter does not support hijack")
@@ -310,7 +310,7 @@ func TestRetryOnTransportError(t *testing.T) {
 		if err != nil {
 			t.Fatalf("hijack: %v", err)
 		}
-		conn.Close()
+		_ = conn.Close()
 	}))
 	defer server.Close()
 
@@ -321,7 +321,7 @@ func TestRetryOnTransportError(t *testing.T) {
 		WithRetries(2),
 		WithBackoff(1*time.Millisecond, 5*time.Millisecond),
 	)
-	client.sleep = func(ctx context.Context, d time.Duration) error {
+	client.sleep = func(_ context.Context, _ time.Duration) error {
 		sleeps++
 		return nil
 	}
@@ -337,11 +337,11 @@ func TestRetryOnTransportError(t *testing.T) {
 
 func TestBackoffDelayBoundedByMax(t *testing.T) {
 	const base = 100 * time.Millisecond
-	const max = 1 * time.Second
+	const maxBackoff = 1 * time.Second
 	for attempt := 0; attempt < 20; attempt++ {
-		got := backoffDelay(base, max, attempt)
-		if got < 0 || got >= max {
-			t.Errorf("attempt %d: delay = %s, want [0, %s)", attempt, got, max)
+		got := backoffDelay(base, maxBackoff, attempt)
+		if got < 0 || got >= maxBackoff {
+			t.Errorf("attempt %d: delay = %s, want [0, %s)", attempt, got, maxBackoff)
 		}
 	}
 }

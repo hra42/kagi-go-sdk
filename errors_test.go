@@ -232,7 +232,7 @@ func TestDoLeavesSuccessBodyReadable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("do: %v", err)
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp.Body)
 
 	got, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -274,6 +274,6 @@ func doGet(t *testing.T, server *httptest.Server) error {
 	if err != nil {
 		t.Fatalf("newRequest: %v", err)
 	}
-	_, err = client.do(req)
+	_, err = client.do(req) //nolint:bodyclose // error path; do() closes on retry/error classification
 	return err
 }

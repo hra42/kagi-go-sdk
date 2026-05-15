@@ -139,7 +139,7 @@ func (c *Client) classifyAttempt(resp *http.Response, err error, attempt int) (b
 
 // backoffDelay returns an exponential-backoff window with full jitter for the
 // given attempt (0-indexed for the post-failure wait).
-func backoffDelay(base, max time.Duration, attempt int) time.Duration {
+func backoffDelay(base, maxBackoff time.Duration, attempt int) time.Duration {
 	if base <= 0 {
 		return 0
 	}
@@ -147,14 +147,14 @@ func backoffDelay(base, max time.Duration, attempt int) time.Duration {
 	window := base
 	for i := 0; i < attempt; i++ {
 		next := window * 2
-		if next <= window || next > max {
-			window = max
+		if next <= window || next > maxBackoff {
+			window = maxBackoff
 			break
 		}
 		window = next
 	}
-	if window > max {
-		window = max
+	if window > maxBackoff {
+		window = maxBackoff
 	}
 	if window <= 0 {
 		return 0

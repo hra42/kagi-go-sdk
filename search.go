@@ -304,7 +304,7 @@ func (c *Client) Search(ctx context.Context, req SearchRequest) (*SearchResult, 
 		return nil, err
 	}
 
-	resp, err := c.do(httpReq)
+	resp, err := c.do(httpReq) //nolint:bodyclose // closed by drainAndClose below
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,7 @@
 # kagi-go-sdk
 
+[![CI](https://github.com/hra42/kagi-go-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/hra42/kagi-go-sdk/actions/workflows/ci.yml)
+
 A handbuilt, idiomatic Go SDK for the [Kagi Search API](https://help.kagi.com/kagi/api/overview.html).
 
 Designed to be ergonomic, production-ready, and easy to vendor — covering the full API surface with clean types, retry logic, rate limit handling, and proper context propagation.
@@ -90,7 +92,16 @@ Available error types: `ErrUnauthorized`, `ErrRateLimited`, `ErrBadRequest`, `Er
 | `client.Search(ctx, SearchRequest)` | Kagi Search API |
 | `client.Extract(ctx, ExtractRequest)` | URL content extraction (single or batch) |
 
-See `_examples/` for runnable usage.
+### Runnable examples
+
+Each example is a self-contained `package main`. Set `KAGI_API_KEY` and run:
+
+```sh
+go run ./_examples/search           # minimal search
+go run ./_examples/extract          # minimal URL extraction
+go run ./_examples/search-advanced  # lens, filters, domain rules, inline extract
+go run ./_examples/custom-client    # all Options + custom *http.Client + APIError handling
+```
 
 ## Contributing
 

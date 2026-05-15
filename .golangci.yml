@@ -1,0 +1,37 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - revive
+    - bodyclose
+    - errorlint
+    - gocritic
+    - unconvert
+    - usestdlibvars
+  exclusions:
+    rules:
+      # Tests use a project helper (drainAndClose) that bodyclose cannot
+      # recognize, and exercise error paths that legitimately discard the
+      # response. Production code still gets bodyclose enforcement.
+      - path: _test\.go
+        linters:
+          - bodyclose
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
