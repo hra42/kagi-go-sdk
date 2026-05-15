@@ -19,7 +19,7 @@ Designed to be ergonomic, production-ready, and easy to vendor — covering the 
 go get github.com/hra42/kagi-go-sdk
 ```
 
-Requires Go 1.22+.
+Requires Go 1.26+.
 
 ## Quick start
 
