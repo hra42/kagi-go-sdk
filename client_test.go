@@ -206,7 +206,7 @@ func TestDoUsesConfiguredHTTPClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("do request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp.Body)
 
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("status code = %d, want %d", resp.StatusCode, http.StatusAccepted)
@@ -216,7 +216,7 @@ func TestDoUsesConfiguredHTTPClient(t *testing.T) {
 func TestNewRequestRejectsNilContext(t *testing.T) {
 	client := NewClient("test-key")
 
-	_, err := client.newRequest(nil, http.MethodGet, "search", nil, nil)
+	_, err := client.newRequest(nil, http.MethodGet, "search", nil, nil) //nolint:staticcheck // testing nil-context guard
 	if err == nil {
 		t.Fatal("expected error for nil context")
 	}

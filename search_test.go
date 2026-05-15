@@ -234,7 +234,7 @@ func TestSearchEmptyQueryRejected(t *testing.T) {
 	cases := []string{"", "   ", "\t\n"}
 	for _, q := range cases {
 		t.Run(q, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 				t.Fatal("server should not be called when Query is empty")
 			}))
 			defer server.Close()
@@ -307,7 +307,7 @@ func TestSearchUnauthorized(t *testing.T) {
 }
 
 func TestSearchContextCancelled(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Fatal("server should not be called with cancelled context")
 	}))
 	defer server.Close()
