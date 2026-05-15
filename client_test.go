@@ -108,7 +108,7 @@ func TestIgnoredOptions(t *testing.T) {
 	}
 }
 
-func TestInvalidBaseURLFallsBackToDefault(t *testing.T) {
+func TestInvalidBaseURLIsIgnored(t *testing.T) {
 	client := NewClient("test-key", WithBaseURL("://not-a-url"))
 
 	if client.baseURL.String() != defaultBaseURL {
@@ -118,7 +118,7 @@ func TestInvalidBaseURLFallsBackToDefault(t *testing.T) {
 
 func TestNewRequestBuildsURLAndHeaders(t *testing.T) {
 	client := NewClient("test-key",
-		WithBaseURL("https://example.com/api/v0/"),
+		WithBaseURL("https://example.com/api/v1/"),
 		WithUserAgent("my-app/1.0"),
 	)
 
@@ -129,14 +129,14 @@ func TestNewRequestBuildsURLAndHeaders(t *testing.T) {
 		t.Fatalf("new request: %v", err)
 	}
 
-	if req.URL.String() != "https://example.com/api/v0/search?q=hello+world" {
-		t.Fatalf("request URL = %q, want %q", req.URL.String(), "https://example.com/api/v0/search?q=hello+world")
+	if req.URL.String() != "https://example.com/api/v1/search?q=hello+world" {
+		t.Fatalf("request URL = %q, want %q", req.URL.String(), "https://example.com/api/v1/search?q=hello+world")
 	}
 	if got := req.Header.Get("Accept"); got != "application/json" {
 		t.Fatalf("Accept = %q, want %q", got, "application/json")
 	}
-	if got := req.Header.Get("Authorization"); got != "Bot test-key" {
-		t.Fatalf("Authorization = %q, want %q", got, "Bot test-key")
+	if got := req.Header.Get("Authorization"); got != "Bearer test-key" {
+		t.Fatalf("Authorization = %q, want %q", got, "Bearer test-key")
 	}
 	if got := req.Header.Get("User-Agent"); got != "my-app/1.0" {
 		t.Fatalf("User-Agent = %q, want %q", got, "my-app/1.0")
@@ -155,14 +155,14 @@ func TestDoUsesConfiguredHTTPClient(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodPost)
 		}
-		if r.URL.Path != "/api/v0/search" {
-			t.Errorf("path = %q, want %q", r.URL.Path, "/api/v0/search")
+		if r.URL.Path != "/api/v1/search" {
+			t.Errorf("path = %q, want %q", r.URL.Path, "/api/v1/search")
 		}
 		if r.URL.Query().Get("limit") != "10" {
 			t.Errorf("limit query = %q, want %q", r.URL.Query().Get("limit"), "10")
 		}
-		if got := r.Header.Get("Authorization"); got != "Bot test-key" {
-			t.Errorf("Authorization = %q, want %q", got, "Bot test-key")
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Errorf("Authorization = %q, want %q", got, "Bearer test-key")
 		}
 		if got := r.Header.Get("User-Agent"); got != "my-app/1.0" {
 			t.Errorf("User-Agent = %q, want %q", got, "my-app/1.0")
@@ -184,7 +184,7 @@ func TestDoUsesConfiguredHTTPClient(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient("test-key",
-		WithBaseURL(server.URL+"/api/v0"),
+		WithBaseURL(server.URL+"/api/v1"),
 		WithHTTPClient(server.Client()),
 		WithUserAgent("my-app/1.0"),
 	)
@@ -213,5 +213,70 @@ func TestNewRequestRejectsNilContext(t *testing.T) {
 	_, err := client.newRequest(nil, http.MethodGet, "search", nil, nil)
 	if err == nil {
 		t.Fatal("expected error for nil context")
+	}
+}
+
+func TestEndpointURL(t *testing.T) {
+	tests := []struct {
+		name         string
+		baseURL      string
+		endpointPath string
+		query        url.Values
+		want         string
+	}{
+		{
+			name:         "default base, leading slash",
+			baseURL:      "https://kagi.com/api/v1",
+			endpointPath: "/search",
+			want:         "https://kagi.com/api/v1/search",
+		},
+		{
+			name:         "default base, no leading slash",
+			baseURL:      "https://kagi.com/api/v1",
+			endpointPath: "search",
+			want:         "https://kagi.com/api/v1/search",
+		},
+		{
+			name:         "trailing slash on base",
+			baseURL:      "https://kagi.com/api/v1/",
+			endpointPath: "search",
+			want:         "https://kagi.com/api/v1/search",
+		},
+		{
+			name:         "empty endpoint path",
+			baseURL:      "https://kagi.com/api/v1",
+			endpointPath: "",
+			want:         "https://kagi.com/api/v1",
+		},
+		{
+			name:         "host-only base",
+			baseURL:      "https://kagi.com",
+			endpointPath: "search",
+			want:         "https://kagi.com/search",
+		},
+		{
+			name:         "with query",
+			baseURL:      "https://kagi.com/api/v1",
+			endpointPath: "search",
+			query:        url.Values{"q": []string{"hello world"}},
+			want:         "https://kagi.com/api/v1/search?q=hello+world",
+		},
+		{
+			name:         "empty query is omitted",
+			baseURL:      "https://kagi.com/api/v1",
+			endpointPath: "search",
+			query:        url.Values{},
+			want:         "https://kagi.com/api/v1/search",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := NewClient("test-key", WithBaseURL(tt.baseURL))
+			got := client.endpointURL(tt.endpointPath, tt.query)
+			if got != tt.want {
+				t.Fatalf("endpointURL = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

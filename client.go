@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	defaultBaseURL   = "https://kagi.com/api/v0"
+	defaultBaseURL   = "https://kagi.com/api/v1"
 	defaultTimeout   = 30 * time.Second
 	defaultUserAgent = "kagi-go-sdk"
 )
@@ -20,7 +20,7 @@ type Client struct {
 	apiKey     string
 	baseURL    *url.URL
 	httpClient *http.Client
-	maxRetries int
+	maxRetries int // TODO(M3): wired into retry/backoff layer
 	userAgent  string
 }
 
@@ -28,8 +28,7 @@ type config struct {
 	baseURL    string
 	httpClient *http.Client
 	maxRetries int
-	timeout    time.Duration
-	timeoutSet bool
+	timeout    *time.Duration
 	userAgent  string
 }
 
@@ -40,7 +39,6 @@ type Option func(*config)
 func NewClient(apiKey string, opts ...Option) *Client {
 	cfg := config{
 		baseURL:   defaultBaseURL,
-		timeout:   defaultTimeout,
 		userAgent: defaultUserAgent,
 	}
 
@@ -52,8 +50,11 @@ func NewClient(apiKey string, opts ...Option) *Client {
 
 	baseURL := parseBaseURL(cfg.baseURL)
 	httpClient := cloneHTTPClient(cfg.httpClient)
-	if cfg.httpClient == nil || cfg.timeoutSet {
-		httpClient.Timeout = cfg.timeout
+	switch {
+	case cfg.timeout != nil:
+		httpClient.Timeout = *cfg.timeout
+	case cfg.httpClient == nil:
+		httpClient.Timeout = defaultTimeout
 	}
 
 	return &Client{
@@ -71,8 +72,7 @@ func WithTimeout(timeout time.Duration) Option {
 		if timeout <= 0 {
 			return
 		}
-		cfg.timeout = timeout
-		cfg.timeoutSet = true
+		cfg.timeout = &timeout
 	}
 }
 
@@ -90,10 +90,17 @@ func WithHTTPClient(httpClient *http.Client) Option {
 }
 
 // WithBaseURL configures the base URL used for API requests.
+//
+// The value must be an absolute URL (with scheme and host); invalid or empty
+// values are ignored and the previously configured base URL is retained.
 func WithBaseURL(baseURL string) Option {
 	return func(cfg *config) {
 		baseURL = strings.TrimSpace(baseURL)
 		if baseURL == "" {
+			return
+		}
+		parsed, err := url.Parse(baseURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return
 		}
 		cfg.baseURL = baseURL

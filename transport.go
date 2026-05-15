@@ -8,10 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 )
 
-const authorizationScheme = "Bot"
+const authorizationScheme = "Bearer"
 
 func (c *Client) newRequest(ctx context.Context, method, endpointPath string, query url.Values, body any) (*http.Request, error) {
 	if ctx == nil {
@@ -47,22 +46,9 @@ func (c *Client) do(req *http.Request) (*http.Response, error) {
 }
 
 func (c *Client) endpointURL(endpointPath string, query url.Values) string {
-	endpoint := *c.baseURL
-
-	basePath := strings.TrimRight(endpoint.Path, "/")
-	endpointPath = strings.TrimLeft(endpointPath, "/")
-	switch {
-	case endpointPath == "":
-		endpoint.Path = basePath
-	case basePath == "":
-		endpoint.Path = "/" + endpointPath
-	default:
-		endpoint.Path = basePath + "/" + endpointPath
-	}
-
+	endpoint := c.baseURL.JoinPath(endpointPath)
 	if len(query) > 0 {
 		endpoint.RawQuery = query.Encode()
 	}
-
 	return endpoint.String()
 }
