@@ -337,11 +337,11 @@ func TestRetryOnTransportError(t *testing.T) {
 
 func TestBackoffDelayBoundedByMax(t *testing.T) {
 	const base = 100 * time.Millisecond
-	const max = 1 * time.Second
+	const maxBackoff = 1 * time.Second
 	for attempt := 0; attempt < 20; attempt++ {
-		got := backoffDelay(base, max, attempt)
-		if got < 0 || got >= max {
-			t.Errorf("attempt %d: delay = %s, want [0, %s)", attempt, got, max)
+		got := backoffDelay(base, maxBackoff, attempt)
+		if got < 0 || got >= maxBackoff {
+			t.Errorf("attempt %d: delay = %s, want [0, %s)", attempt, got, maxBackoff)
 		}
 	}
 }

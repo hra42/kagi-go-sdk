@@ -1,3 +1,12 @@
+// Package kagi is a handbuilt, idiomatic Go SDK for the Kagi Search API.
+//
+// Construct a [Client] with [NewClient] and call [Client.Search] or
+// [Client.Extract]. Transient failures (HTTP 429, 5xx, and network errors)
+// are retried transparently with exponential backoff plus full jitter;
+// see [WithRetries] and [WithBackoff] to tune the behavior. Errors are
+// returned as [*APIError] values wrapping sentinel errors such as
+// [ErrUnauthorized] and [ErrRateLimited] for use with [errors.Is] and
+// [errors.As].
 package kagi
 
 import (
@@ -155,18 +164,18 @@ func WithRetries(maxRetries int) Option {
 // WithBackoff configures retry backoff timing.
 //
 // base is the initial backoff window; the window doubles each attempt up to
-// max. Each delay is jittered uniformly in [0, window). Non-positive values
-// leave the corresponding default in place (500ms base, 30s max).
+// maxBackoff. Each delay is jittered uniformly in [0, window). Non-positive
+// values leave the corresponding default in place (500ms base, 30s max).
 //
-// The configured max is also the ceiling applied to a server-provided
+// The configured maxBackoff is also the ceiling applied to a server-provided
 // Retry-After value.
-func WithBackoff(base, max time.Duration) Option {
+func WithBackoff(base, maxBackoff time.Duration) Option {
 	return func(cfg *config) {
 		if base > 0 {
 			cfg.backoffBase = base
 		}
-		if max > 0 {
-			cfg.backoffMax = max
+		if maxBackoff > 0 {
+			cfg.backoffMax = maxBackoff
 		}
 	}
 }
