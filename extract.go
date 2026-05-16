@@ -9,22 +9,6 @@ import (
 	"strings"
 )
 
-// ExtractFormat selects the response serialization format used by the
-// Extract endpoint.
-type ExtractFormat string
-
-// Supported [ExtractFormat] values.
-const (
-	// ExtractFormatJSON requests a JSON response envelope (the default).
-	ExtractFormatJSON ExtractFormat = "json"
-	// ExtractFormatMarkdown requests a raw text/markdown response.
-	//
-	// The SDK's [Client.Extract] decoder expects JSON; setting this value
-	// will cause the response decode to fail. Leave [ExtractRequest.Format]
-	// unset to inherit the JSON default.
-	ExtractFormatMarkdown ExtractFormat = "markdown"
-)
-
 // ExtractPage identifies a single page to extract content from.
 type ExtractPage struct {
 	// URL is the HTTPS URL of the page to extract. Required.
@@ -45,11 +29,6 @@ type ExtractRequest struct {
 	// in seconds. Server-side range is 0.5..10; out-of-range values are
 	// clamped by the server.
 	Timeout float64 `json:"timeout,omitempty"`
-
-	// Format selects the response serialization. Defaults to
-	// [ExtractFormatJSON] server-side when unset; see
-	// [ExtractFormatMarkdown] for caveats.
-	Format ExtractFormat `json:"format,omitempty"`
 }
 
 // PageResult is the extracted content for a single page in an
