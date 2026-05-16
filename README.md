@@ -38,7 +38,7 @@ Kagi publishes [an official client](https://github.com/kagisearch/kagi-openapi-g
 | Source | Handwritten | OpenAPI-generated |
 | External dependencies | None | Generator runtime + transitive deps |
 | Error model | Sentinel hierarchy (`ErrUnauthorized`, `ErrRateLimited`, `ErrBadRequest`, `ErrServerError`) wrapped by `*APIError` | Generic `*GenericOpenAPIError` |
-| Enums | Typed (`Workflow`, `TimeRelative`, `DomainRuleKind`, `ExtractFormat`) | String constants |
+| Enums | Typed (`Workflow`, `TimeRelative`, `DomainRuleKind`) | String constants |
 | Retries on 429 / 5xx | Built-in, transparent, jittered backoff, honors `Retry-After` | Not provided — caller's responsibility |
 | `context.Context` on every call | Yes | Yes |
 | Godoc coverage | Every exported symbol | Generated stubs |
@@ -144,7 +144,6 @@ func (c *Client) Extract(ctx context.Context, req ExtractRequest) (*ExtractResul
 |---|---|---|
 | `Pages` | `[]ExtractPage` | **Required.** 1..10 entries; each `URL` must be HTTPS. |
 | `Timeout` | `float64` | Bulk time budget in seconds (0.5..10). |
-| `Format` | `ExtractFormat` | `ExtractFormatJSON` (default). `ExtractFormatMarkdown` is not supported by this SDK's decoder — leave unset. |
 
 A 200 response can include both successful `Data` entries and per-URL failures in `Errors`; partial success is not converted into a Go error.
 
@@ -174,7 +173,6 @@ for _, e := range res.Errors {
 | `Workflow` | `WorkflowSearch`, `WorkflowImages`, `WorkflowVideos`, `WorkflowNews`, `WorkflowPodcasts` |
 | `TimeRelative` | `TimeRelativeDay`, `TimeRelativeWeek`, `TimeRelativeMonth` |
 | `DomainRuleKind` | `DomainRuleBlock`, `DomainRuleLower`, `DomainRuleRaise`, `DomainRulePin` |
-| `ExtractFormat` | `ExtractFormatJSON`, `ExtractFormatMarkdown` |
 
 ## Configuration
 

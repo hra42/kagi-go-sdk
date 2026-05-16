@@ -100,7 +100,6 @@ func TestExtractFullRequestBody(t *testing.T) {
 			{URL: "https://example.com/b"},
 		},
 		Timeout: 1.337,
-		Format:  ExtractFormatJSON,
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -111,8 +110,8 @@ func TestExtractFullRequestBody(t *testing.T) {
 		if got["timeout"].(float64) != 1.337 {
 			t.Errorf("timeout = %v", got["timeout"])
 		}
-		if got["format"] != "json" {
-			t.Errorf("format = %v", got["format"])
+		if _, ok := got["format"]; ok {
+			t.Errorf("format should never be sent, got %v", got["format"])
 		}
 		pages, _ := got["pages"].([]any)
 		if len(pages) != 2 {
